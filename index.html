@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>MicioTrack — Localizzatore Gatto (0€ Abbonamento)</title>
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#0b1120" />
+  <!-- Supporto nativo App a tutto schermo per iOS (iPhone / iPad) -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="MicioTrack" />
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/616/616430.png" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+  <!-- BARRA SUPERIORE -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo">🐾</div>
+      <div class="brand-title">
+        <h1 id="headerCatName">MicioTrack Live</h1>
+        <p id="headerModelText">Server GPS/LBS Locale • Zero Abbonamenti</p>
+      </div>
+    </div>
+
+    <div class="status-pills">
+      <div id="geofencePill" class="pill safe">🏠 Nel Recinto Sicuro</div>
+      <div id="sourcePill" class="pill">🛰️ Fonte: GPS (±4m)</div>
+      <div id="batteryPill" class="pill">🔋 88%</div>
+    </div>
+  </header>
+
+  <!-- BANNER ALLARME USCITA DAL RECINTO -->
+  <div id="alertBanner" class="alert-banner hidden">
+    <span>🚨 ATTENZIONE: <strong id="alertCatName">Micio</strong> è uscito dal recinto sicuro di casa (<span id="alertDist">0</span>m da casa)!</span>
+    <button class="btn" style="background:white;color:#b91c1c;padding:4px 10px;" onclick="centerOnCat()">Centra sul Gatto</button>
+  </div>
+
+  <!-- LAYOUT PRINCIPALE -->
+  <main class="app-layout">
+
+    <!-- PANNELLO CONTROLLI A SINISTRA (O SOTTO SU MOBILE) -->
+    <aside class="sidebar">
+      <nav class="tabs">
+        <button class="tab-btn active" onclick="switchTab('live', this)">
+          <span class="tab-icon">📍</span>
+          <span>Radar Live</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('gf07', this)">
+          <span class="tab-icon">📟</span>
+          <span>Il tuo GF-07</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('gps4g', this)">
+          <span class="tab-icon">🛰️</span>
+          <span>GPS 4G TCP</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('home', this)">
+          <span class="tab-icon">🏠</span>
+          <span>Recinto Casa</span>
+        </button>
+      </nav>
+
+      <!-- TAB 1: LIVE & SIMULATORE -->
+      <section id="tab-live" class="tab-content active">
+        <div class="card">
+          <div class="card-title">
+            <span>📊 Telemetria in Tempo Reale</span>
+            <span id="lastUpdateText" style="font-size:0.72rem;color:var(--text-muted);">Adesso</span>
+          </div>
+          <div class="metrics-grid">
+            <div class="metric-box">
+              <div class="metric-label">Distanza da Casa</div>
+              <div class="metric-value" id="metricDistance">19 m</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Precisione Segnale</div>
+              <div class="metric-value" id="metricAccuracy">± 4 m</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Velocità</div>
+              <div class="metric-value" id="metricSpeed">1.2 km/h</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Coordinate</div>
+              <div class="metric-value" id="metricCoords" style="font-size:0.78rem;">41.9029, 12.4965</div>
+            </div>
+          </div>
+          <p id="rawStatusInfo" class="helper-text" style="margin-top:9px;"></p>
+
+          <div class="btn-grid" style="margin-top:11px;">
+            <button class="btn btn-primary" onclick="syncLiveGf07Now()">⚡ Aggiorna Live GF-07 (GPRS)</button>
+            <a id="openWalkDirectionsBtn" class="btn btn-blue" href="#" target="_blank" rel="noopener">🧭 Raggiungi a Piedi</a>
+          </div>
+          <button id="calibrateLbsBtn" class="btn btn-warning btn-full" style="margin-top:8px;" onclick="toggleLbsCalibration()">
+            📍 Calibra Cella Vodafone GF-07 su Casa (Azzera i 1541m)
+          </button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            <span>🎮 Simulatore per Test Immediato</span>
+            <span id="simBadge" style="font-size:0.72rem;color:var(--text-muted);">Spento</span>
+          </div>
+          <p class="helper-text" style="margin-bottom:10px;">
+            Prova subito il comportamento dell'app sia con un vero GPS preciso al metro, sia simulando l'errore di cella telefonica (LBS ±480m) della tua scheda <strong>GF-07 (X66_MB_YL1)</strong>:
+          </p>
+          <div style="display:flex;flex-direction:column;gap:7px;">
+            <button class="btn btn-primary btn-full" onclick="startSim('garden')">
+              🐾 Simula Gatto in Giardino (GPS preciso ±3m)
+            </button>
+            <button class="btn btn-danger btn-full" onclick="startSim('explore')">
+              🚨 Simula Fuga Fuori dal Recinto (Test Allarme)
+            </button>
+            <button class="btn btn-warning btn-full" onclick="startSim('gf07_lbs')">
+              📡 Simula il tuo GF-07 (Triangolazione Cella ±480m)
+            </button>
+            <button class="btn btn-full" onclick="stopSim()">
+              ⏹️ Ferma Simulatore
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: IL TUO GF-07 (X66_MB_YL1) -->
+      <section id="tab-gf07" class="tab-content">
+        <div class="card" style="border-color: rgba(59, 130, 246, 0.4); background: rgba(30, 41, 59, 0.9);">
+          <div class="card-title">
+            <span>📱 Come invia gli SMS dal PC o Telefono?</span>
+          </div>
+          <p class="helper-text" style="margin-bottom:8px;">
+            Il PC non ha una SIM fisica dentro: per non pagare servizi SMS online, l'app usa la SIM del tuo smartphone in <strong>2 modi gratuiti</strong>:
+          </p>
+          <div style="font-size:0.75rem; color:#e2e8f0; display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
+            <div><strong>1️⃣ Dal Telefono (Consigliato):</strong> Apri su smartphone <strong id="phoneUrlText" style="color:#34d399;">http://192.168.1.223:3000</strong> (o inquadra il QR qui sotto). Tocca un pulsante e parte subito l'SMS/chiamata!</div>
+            <div><strong>2️⃣ Da questo PC:</strong> Usa l'app <em>"Collegamento al telefono"</em> di Windows oppure incolla qui sotto il Webhook della tua app Android per l'invio automatico via Wi-Fi.</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px; background:#0f172a; padding:8px 10px; border-radius:8px; border:1px solid var(--border);">
+            <img id="phoneQrImg" src="" alt="QR Telefono" style="width:72px; height:72px; border-radius:6px; background:white; padding:3px;" />
+            <div style="font-size:0.74rem; color:var(--text-muted);">
+              <strong style="color:white;">Inquadra col telefono</strong><br/>
+              Apre questa stessa app sul cellulare per mandare SMS e chiamare il GF-07 con 1 tocco.
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            <span>📟 Telecomando GF-07 (X66_MB_YL1)</span>
+          </div>
+          <div class="form-group">
+            <label>Numero di Telefono della SIM dentro il GF-07:</label>
+            <div style="display:flex;gap:6px;">
+              <input id="gf07PhoneInput" type="tel" class="input" placeholder="Es. +393401234567" />
+              <button class="btn btn-primary" onclick="saveTrackerPhone()">Salva</button>
+            </div>
+          </div>
+
+          <div class="btn-grid" style="margin-top:10px;">
+            <button class="btn btn-primary" onclick="sendSmsCommand('000')">
+              🔗 000 (Associa Master)
+            </button>
+            <button class="btn btn-blue" onclick="sendSmsCommand('888')">
+              🔋 888 (Stato & Batteria)
+            </button>
+            <button class="btn btn-blue" onclick="sendSmsCommand('777')">
+              📍 777 (Posizione SMS)
+            </button>
+            <button class="btn btn-warning" onclick="sendSmsCommand('666')">
+              🔊 666 (Richiama se rumore)
+            </button>
+            <button class="btn" onclick="sendSmsCommand('444')">
+              ⏹️ 444 (Disattiva 666)
+            </button>
+            <button class="btn" onclick="sendSmsCommand('999')">
+              🔄 999 (Riavvia GF-07)
+            </button>
+          </div>
+
+          <button class="btn btn-danger btn-full" style="margin-top:9px;" onclick="callTrackerMic()">
+            📞 Chiama il GF-07 (Ascolta Microfono Ambientale)
+          </button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            <span>📩 Incolla Risposta SMS del GF-07</span>
+          </div>
+          <p class="helper-text" style="margin-bottom:8px;">
+            Quando il GF-07 ti risponde con un SMS o un link con le coordinate della cella telefonica, incollalo qui per vederlo subito sulla mappa satellitare col cerchio di copertura:
+          </p>
+          <textarea id="gf07SmsTextarea" placeholder="Es: Current position! Lat:41.9035, Lon:12.4972, BAT:80% oppure link maps..."></textarea>
+          <button class="btn btn-primary btn-full" style="margin-top:8px;" onclick="parseGf07Sms()">
+            🗺️ Mostra Posizione SMS sulla Mappa
+          </button>
+        </div>
+      </section>
+
+      <!-- TAB 3: COLLARE GPS 4G VERO (TCP SERVER) -->
+      <section id="tab-gps4g" class="tab-content">
+        <div class="card">
+          <div class="card-title">
+            <span>🛰️ Server Ricevitore GPS Nativo (Attivo)</span>
+            <span style="color:#34d399;font-size:0.75rem;">Porta TCP 5023</span>
+          </div>
+          <p class="helper-text" style="margin-bottom:10px;">
+            Il tuo PC sta già ascoltando sulla porta <strong>TCP 5023</strong> (senza alcun abbonamento) per ricevere la posizione al metro da:
+            <strong>Topin ZX303 / G12P 4G</strong> e <strong>TKSTAR / Winnes TK911 4G</strong>.
+          </p>
+
+          <div class="form-group">
+            <label>APN della SIM (es. <code>TM</code> per Things Mobile, <code>iliad</code>, <code>internet.it</code>):</label>
+            <input id="apnInput" type="text" class="input" value="TM" oninput="updateSmsConfigPreview()" />
+          </div>
+
+          <div class="form-group">
+            <label>Indirizzo IP del tuo Server (Rete Locale / IP Pubblico):</label>
+            <input id="serverIpInput" type="text" class="input" value="127.0.0.1" oninput="updateSmsConfigPreview()" />
+          </div>
+
+          <div style="margin-top:8px;">
+            <label style="font-size:0.74rem;color:var(--text-muted);">1️⃣ Comandi SMS per Topin G12P / Scheda ZX303:</label>
+            <div id="topinCommandsBox" class="code-box"></div>
+          </div>
+
+          <div style="margin-top:10px;">
+            <label style="font-size:0.74rem;color:var(--text-muted);">2️⃣ Comandi SMS per Winnes / TKSTAR TK911 4G:</label>
+            <div id="tkstarCommandsBox" class="code-box"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            <span>📡 Log Connessioni Server in Tempo Reale</span>
+          </div>
+          <div id="tcpLogsContainer" class="code-box" style="max-height:130px;overflow-y:auto;color:#94a3b8;">
+            In attesa di pacchetti...
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: CASA & RECINTO VIRTUALE (GEOFENCE) -->
+      <section id="tab-home" class="tab-content">
+        <div class="card">
+          <div class="card-title">
+            <span>🏠 Imposta Posizione di Casa & Recinto</span>
+          </div>
+          <p class="helper-text" style="margin-bottom:10px;">
+            Puoi usare il GPS del tuo telefono/PC oppure <strong>cliccare in qualsiasi punto della mappa</strong> con il tasto "Posiziona Casa sulla Mappa" attivo.
+          </p>
+
+          <div class="form-group">
+            <label>Nome del tuo Gatto:</label>
+            <input id="catNameInput" type="text" class="input" placeholder="Micio" />
+          </div>
+
+          <div class="form-group">
+            <label>Raggio Zona Sicura intorno a Casa: <strong><span id="radiusValueLabel">120</span> metri</strong></label>
+            <input id="radiusSlider" type="range" min="25" max="1000" step="5" value="120" oninput="previewRadius(this.value)" />
+          </div>
+
+          <div class="btn-grid" style="margin-bottom:9px;">
+            <button class="btn btn-blue" onclick="setHomeFromBrowserGps()">
+              📍 Usa Posizione Attuale
+            </button>
+            <button id="pickMapHomeBtn" class="btn" onclick="toggleMapHomePicker()">
+              🖱️ Clicca sulla Mappa
+            </button>
+          </div>
+
+          <button class="btn btn-primary btn-full" onclick="saveHomeAndSettings()">
+            💾 Salva Recinto e Riporta Gatto a Casa
+          </button>
+
+          <button class="btn btn-full" style="margin-top:8px;" onclick="clearTrailHistory()">
+            🧹 Pulisci Traccia Storica sulla Mappa
+          </button>
+        </div>
+      </section>
+    </aside>
+
+    <!-- MAPPA SATELLITARE + STRADALE GRATUITA -->
+    <section class="map-wrapper">
+      <div id="map"></div>
+
+      <!-- CONTROLLI FLOTTANTI SULLA MAPPA -->
+      <div class="map-floating-controls">
+        <button id="toggleLayerBtn" class="btn" style="background:rgba(15,23,42,0.9);backdrop-filter:blur(6px);" onclick="toggleMapLayer()">
+          🛰️ Passa a Vista Stradale
+        </button>
+        <button class="btn" style="background:rgba(15,23,42,0.9);backdrop-filter:blur(6px);" onclick="centerOnCat()">
+          🐾 Centra su Gatto
+        </button>
+        <button class="btn" style="background:rgba(15,23,42,0.9);backdrop-filter:blur(6px);" onclick="centerOnHome()">
+          🏠 Centra su Casa
+        </button>
+      </div>
+
+      <!-- LEGENDA IN BASSO -->
+      <div class="map-legend">
+        <div class="legend-item">
+          <span class="dot" style="background:#10b981;"></span>
+          <span>Gatto (GPS Preciso)</span>
+        </div>
+        <div class="legend-item">
+          <span class="dot" style="background:#f59e0b;"></span>
+          <span>Raggio Cella GF-07 (LBS)</span>
+        </div>
+        <div class="legend-item">
+          <span class="dot" style="background:#3b82f6;"></span>
+          <span>Casa & Recinto Sicuro</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

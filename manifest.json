@@ -1,0 +1,17 @@
+{
+  "name": "MicioTrack - Localizzatore Gatto GPS & GF-07",
+  "short_name": "MicioTrack",
+  "description": "App per localizzare il tuo gatto a 0€ di abbonamento (GPS 4G e GF-07)",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#10b981",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/616/616430.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
